@@ -2,17 +2,18 @@
 const express = require('express');
 const router = express.Router();
 const usuarioController = require('../controllers/usuarioController');
-const { verificarToken, verificarRol } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
 
-// Todas las rutas de usuarios requieren un token válido
+// Rutas que requieren autenticación
 router.use(verificarToken);
 
-// Rutas de administración (solo para administradores)
-router.get('/', verificarRol('admin'), usuarioController.obtenerUsuarios);
-router.delete('/:id', verificarRol('admin'), usuarioController.eliminarUsuario);
+// Ruta para obtener el perfil del usuario autenticado
+router.get('/perfil', usuarioController.obtenerPerfil);
 
-// Rutas de usuario general
+// Rutas de administración de usuarios
+router.get('/', usuarioController.obtenerUsuarios);
 router.get('/:id', usuarioController.obtenerUsuario);
 router.put('/:id', usuarioController.actualizarUsuario);
+router.delete('/:id', usuarioController.eliminarUsuario);
 
 module.exports = router;

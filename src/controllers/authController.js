@@ -5,12 +5,12 @@ require('dotenv').config();
 
 const generarTokens = (usuario) => {
   const accessToken = jwt.sign(
-    { id: usuario.UsuarioID, rol: usuario.rol },
+    { id: usuario.id, username: usuario.username },
     process.env.JWT_SECRET,
-    { expiresIn: '15m' }
+    { expiresIn: '24h' }
   );
   const refreshToken = jwt.sign(
-    { id: usuario.UsuarioID },
+    { id: usuario.id },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: '7d' }
   );
@@ -20,49 +20,93 @@ const generarTokens = (usuario) => {
 const authController = {
   registro: async (req, res) => {
     try {
-      const { email } = req.body;
+      const { nombre, correo, contrasena, username } = req.body;
 
-      const usuarioExistente = await Usuario.findByEmail(email);
-      if (usuarioExistente) {
-        return res.status(400).json({ success: false, message: 'El correo electrónico ya está registrado' });
+      // Validaciones básicas
+      if (!nombre || !correo || !contrasena || !username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Todos los campos son obligatorios: nombre, correo, contrasena, username'
+        });
       }
 
-      const nuevoUsuario = await Usuario.create(req.body);
+      // Verificar si el correo ya existe
+      const usuarioExistentePorEmail = await Usuario.findByEmail(correo);
+      if (usuarioExistentePorEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'El correo electrónico ya está registrado'
+        });
+      }
+
+      // Verificar si el username ya existe
+      const usuarioExistentePorUsername = await Usuario.findByUsername(username);
+      if (usuarioExistentePorUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'El nombre de usuario ya está en uso'
+        });
+      }
+
+      const nuevoUsuario = await Usuario.create({ nombre, correo, contrasena, username });
       const tokens = generarTokens(nuevoUsuario);
 
       res.status(201).json({
         success: true,
         message: 'Usuario registrado exitosamente',
         data: {
-          usuario: {
-            id: nuevoUsuario.UsuarioID,
-            nombre: nuevoUsuario.nombre,
-            apellido: nuevoUsuario.apellido,
-            email: nuevoUsuario.email,
-            rol: nuevoUsuario.rol
-          },
+          usuario: nuevoUsuario.toPublicJSON(),
           tokens
         }
       });
 
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ success: false, message: 'Error al registrar usuario' });
+      console.error('Error en registro:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor al registrar usuario'
+      });
     }
   },
 
   login: async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { correo, contrasena, username } = req.body;
 
-      const usuario = await Usuario.findByEmail(email);
-      if (!usuario) {
-        return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+      if (!contrasena || (!correo && !username)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Se requiere contraseña y correo o username'
+        });
       }
 
-      const passwordCorrecta = await usuario.comparePassword(password);
+      let usuario;
+      if (correo) {
+        usuario = await Usuario.findByEmail(correo);
+      } else {
+        usuario = await Usuario.findByUsername(username);
+      }
+
+      if (!usuario) {
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciales inválidas'
+        });
+      }
+
+      if (usuario.estado !== 'activo') {
+        return res.status(401).json({
+          success: false,
+          message: 'Cuenta de usuario no activa'
+        });
+      }
+
+      const passwordCorrecta = await usuario.comparePassword(contrasena);
       if (!passwordCorrecta) {
-        return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciales inválidas'
+        });
       }
 
       const tokens = generarTokens(usuario);
@@ -71,19 +115,55 @@ const authController = {
         success: true,
         message: 'Inicio de sesión exitoso',
         data: {
-          usuario: {
-            id: usuario.UsuarioID,
-            nombre: usuario.nombre,
-            email: usuario.email,
-            rol: usuario.rol
-          },
+          usuario: usuario.toPublicJSON(),
           tokens
         }
       });
 
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ success: false, message: 'Error al iniciar sesión' });
+      console.error('Error en login:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor al iniciar sesión'
+      });
+    }
+  },
+
+  refreshToken: async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          success: false,
+          message: 'Se requiere refresh token'
+        });
+      }
+
+      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      const usuario = await Usuario.findById(decoded.id);
+
+      if (!usuario || usuario.estado !== 'activo') {
+        return res.status(401).json({
+          success: false,
+          message: 'Token inválido o usuario no activo'
+        });
+      }
+
+      const tokens = generarTokens(usuario);
+
+      res.json({
+        success: true,
+        message: 'Token renovado exitosamente',
+        data: { tokens }
+      });
+
+    } catch (error) {
+      console.error('Error en refresh token:', error);
+      res.status(401).json({
+        success: false,
+        message: 'Token inválido'
+      });
     }
   }
 };

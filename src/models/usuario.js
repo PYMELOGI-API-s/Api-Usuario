@@ -4,20 +4,22 @@ const bcrypt = require('bcryptjs');
 
 class Usuario {
   constructor(usuario) {
-    this.UsuarioID = usuario.UsuarioID;
+    this.id = usuario.id;
+    this.contrasena = usuario.contrasena;
+    this.correo = usuario.correo;
     this.nombre = usuario.nombre;
-    this.apellido = usuario.apellido;
-    this.email = usuario.email;
-    this.password_hash = usuario.password_hash;
-    this.rol = usuario.rol;
+    this.email = usuario.email || usuario.correo; // Compatibilidad
+    this.password = usuario.password || usuario.contrasena; // Compatibilidad
+    this.username = usuario.username;
     this.estado = usuario.estado;
+    this.fecha_creacion = usuario.fecha_creacion;
   }
 
   static async findById(id) {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('id', sql.Int, id)
-      .query('SELECT * FROM Usuarios WHERE UsuarioID = @id');
+      .query('SELECT * FROM Usuarios WHERE id = @id AND estado != \'eliminado\'');
     return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
   }
 
@@ -25,50 +27,99 @@ class Usuario {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('email', sql.NVarChar, email)
-      .query('SELECT * FROM Usuarios WHERE email = @email');
+      .query('SELECT * FROM Usuarios WHERE (email = @email OR correo = @email) AND estado != \'eliminado\'');
+    return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
+  }
+
+  static async findByUsername(username) {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('username', sql.NVarChar, username)
+      .query('SELECT * FROM Usuarios WHERE username = @username AND estado != \'eliminado\'');
     return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
   }
 
   static async create(nuevoUsuario) {
-    const { nombre, apellido, email, password } = nuevoUsuario;
+    const { nombre, correo, contrasena, username } = nuevoUsuario;
+    
+    // Hash de la contraseña
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(contrasena, salt);
 
     const pool = await poolPromise;
     const result = await pool.request()
       .input('nombre', sql.NVarChar, nombre)
-      .input('apellido', sql.NVarChar, apellido)
-      .input('email', sql.NVarChar, email)
-      .input('password', sql.NVarChar, hashedPassword)
-      .query('INSERT INTO Usuarios (nombre, apellido, email, password_hash) OUTPUT INSERTED.* VALUES (@nombre, @apellido, @email, @password)');
+      .input('correo', sql.NVarChar, correo)
+      .input('email', sql.NVarChar, correo) // Para compatibilidad
+      .input('contrasena', sql.NVarChar, hashedPassword)
+      .input('password', sql.NVarChar, hashedPassword) // Para compatibilidad
+      .input('username', sql.NVarChar, username)
+      .query(`
+        INSERT INTO Usuarios (nombre, correo, email, contrasena, password, username) 
+        OUTPUT INSERTED.* 
+        VALUES (@nombre, @correo, @email, @contrasena, @password, @username)
+      `);
     return new Usuario(result.recordset[0]);
   }
 
   static async update(id, updates) {
     const pool = await poolPromise;
-    const { nombre, apellido } = updates;
-    await pool.request()
-        .input('id', sql.Int, id)
-        .input('nombre', sql.NVarChar, nombre)
-        .input('apellido', sql.NVarChar, apellido)
-        .query('UPDATE Usuarios SET nombre = @nombre, apellido = @apellido WHERE UsuarioID = @id');
+    const campos = [];
+    const request = pool.request().input('id', sql.Int, id);
+
+    if (updates.nombre) {
+      campos.push('nombre = @nombre');
+      request.input('nombre', sql.NVarChar, updates.nombre);
+    }
+    if (updates.correo) {
+      campos.push('correo = @correo, email = @correo');
+      request.input('correo', sql.NVarChar, updates.correo);
+    }
+    if (updates.username) {
+      campos.push('username = @username');
+      request.input('username', sql.NVarChar, updates.username);
+    }
+    if (updates.contrasena) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(updates.contrasena, salt);
+      campos.push('contrasena = @contrasena, password = @contrasena');
+      request.input('contrasena', sql.NVarChar, hashedPassword);
+    }
+
+    if (campos.length > 0) {
+      await request.query(`UPDATE Usuarios SET ${campos.join(', ')} WHERE id = @id`);
+    }
   }
 
   static async delete(id) {
     const pool = await poolPromise;
     await pool.request()
       .input('id', sql.Int, id)
-      .query('UPDATE Usuarios SET estado = \'eliminado\' WHERE UsuarioID = @id');
+      .query('UPDATE Usuarios SET estado = \'eliminado\' WHERE id = @id');
   }
 
   static async getAll() {
     const pool = await poolPromise;
-    const result = await pool.request().query('SELECT * FROM Usuarios WHERE estado <> \'eliminado\'');
+    const result = await pool.request()
+      .query('SELECT * FROM Usuarios WHERE estado != \'eliminado\' ORDER BY fecha_creacion DESC');
     return result.recordset.map(u => new Usuario(u));
   }
 
   async comparePassword(password) {
-    return await bcrypt.compare(password, this.password_hash);
+    return await bcrypt.compare(password, this.contrasena);
+  }
+
+  // Método para devolver datos públicos (sin contraseña)
+  toPublicJSON() {
+    return {
+      id: this.id,
+      nombre: this.nombre,
+      correo: this.correo,
+      email: this.email,
+      username: this.username,
+      estado: this.estado,
+      fecha_creacion: this.fecha_creacion
+    };
   }
 }
 
