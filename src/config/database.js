@@ -8,8 +8,8 @@ const dbConfig = {
   server: process.env.DB_SERVER,
   database: process.env.DB_DATABASE,
   options: {
-    encrypt: true, // Use this if you're on Windows Azure
-    trustServerCertificate: true // Change to true for local dev / self-signed certs
+    encrypt: false, // Se cambió a false porque el proveedor no es Azure
+    trustServerCertificate: true // Se mantiene para compatibilidad
   }
 };
 
