@@ -94,13 +94,6 @@ const authController = {
         });
       }
 
-      if (usuario.estado !== 'activo') {
-        return res.status(401).json({
-          success: false,
-          message: 'Cuenta de usuario no activa'
-        });
-      }
-
       const passwordCorrecta = await usuario.comparePassword(contrasena);
       if (!passwordCorrecta) {
         return res.status(401).json({
@@ -143,10 +136,10 @@ const authController = {
       const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
       const usuario = await Usuario.findById(decoded.id);
 
-      if (!usuario || usuario.estado !== 'activo') {
+      if (!usuario) {
         return res.status(401).json({
           success: false,
-          message: 'Token inválido o usuario no activo'
+          message: 'Token inválido'
         });
       }
 

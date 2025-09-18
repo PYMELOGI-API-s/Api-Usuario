@@ -22,14 +22,14 @@ const verificarToken = async (req, res, next) => {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('id', sql.Int, decoded.id)
-      .query('SELECT * FROM Usuarios WHERE id = @id AND estado = \'activo\'');
+      .query('SELECT * FROM usuario WHERE id = @id');
       
     const usuario = result.recordset[0];
 
     if (!usuario) {
       return res.status(401).json({
         success: false,
-        message: 'Token inválido. El usuario no existe o no está activo.'
+        message: 'Token inválido. El usuario no existe.'
       });
     }
 
@@ -38,8 +38,7 @@ const verificarToken = async (req, res, next) => {
       nombre: usuario.nombre,
       correo: usuario.correo,
       email: usuario.email,
-      username: usuario.username,
-      estado: usuario.estado
+      username: usuario.username
     };
     
     next();
@@ -83,7 +82,7 @@ const verificarTokenOpcional = async (req, res, next) => {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('id', sql.Int, decoded.id)
-      .query('SELECT * FROM Usuarios WHERE id = @id AND estado = \'activo\'');
+      .query('SELECT * FROM usuario WHERE id = @id');
       
     const usuario = result.recordset[0];
 
@@ -93,8 +92,7 @@ const verificarTokenOpcional = async (req, res, next) => {
         nombre: usuario.nombre,
         correo: usuario.correo,
         email: usuario.email,
-        username: usuario.username,
-        estado: usuario.estado
+        username: usuario.username
       };
     }
     

@@ -11,7 +11,6 @@ class Usuario {
     this.email = usuario.email || usuario.correo; // Compatibilidad
     this.password = usuario.password || usuario.contrasena; // Compatibilidad
     this.username = usuario.username;
-    this.estado = usuario.estado;
     this.fecha_creacion = usuario.fecha_creacion;
   }
 
@@ -19,7 +18,7 @@ class Usuario {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('id', sql.Int, id)
-      .query('SELECT * FROM Usuarios WHERE id = @id AND estado != \'eliminado\'');
+      .query('SELECT * FROM usuario WHERE id = @id');
     return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
   }
 
@@ -27,7 +26,7 @@ class Usuario {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('email', sql.NVarChar, email)
-      .query('SELECT * FROM Usuarios WHERE (email = @email OR correo = @email) AND estado != \'eliminado\'');
+      .query('SELECT * FROM usuario WHERE (email = @email OR correo = @email)');
     return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
   }
 
@@ -35,14 +34,13 @@ class Usuario {
     const pool = await poolPromise;
     const result = await pool.request()
       .input('username', sql.NVarChar, username)
-      .query('SELECT * FROM Usuarios WHERE username = @username AND estado != \'eliminado\'');
+      .query('SELECT * FROM usuario WHERE username = @username');
     return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
   }
 
   static async create(nuevoUsuario) {
     const { nombre, correo, contrasena, username } = nuevoUsuario;
     
-    // Hash de la contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(contrasena, salt);
 
@@ -50,12 +48,12 @@ class Usuario {
     const result = await pool.request()
       .input('nombre', sql.NVarChar, nombre)
       .input('correo', sql.NVarChar, correo)
-      .input('email', sql.NVarChar, correo) // Para compatibilidad
+      .input('email', sql.NVarChar, correo)
       .input('contrasena', sql.NVarChar, hashedPassword)
-      .input('password', sql.NVarChar, hashedPassword) // Para compatibilidad
+      .input('password', sql.NVarChar, hashedPassword)
       .input('username', sql.NVarChar, username)
       .query(`
-        INSERT INTO Usuarios (nombre, correo, email, contrasena, password, username) 
+        INSERT INTO usuario (nombre, correo, email, contrasena, password, username) 
         OUTPUT INSERTED.* 
         VALUES (@nombre, @correo, @email, @contrasena, @password, @username)
       `);
@@ -87,7 +85,7 @@ class Usuario {
     }
 
     if (campos.length > 0) {
-      await request.query(`UPDATE Usuarios SET ${campos.join(', ')} WHERE id = @id`);
+      await request.query(`UPDATE usuario SET ${campos.join(', ')} WHERE id = @id`);
     }
   }
 
@@ -95,13 +93,13 @@ class Usuario {
     const pool = await poolPromise;
     await pool.request()
       .input('id', sql.Int, id)
-      .query('UPDATE Usuarios SET estado = \'eliminado\' WHERE id = @id');
+      .query('DELETE FROM usuario WHERE id = @id');
   }
 
   static async getAll() {
     const pool = await poolPromise;
     const result = await pool.request()
-      .query('SELECT * FROM Usuarios WHERE estado != \'eliminado\' ORDER BY fecha_creacion DESC');
+      .query('SELECT * FROM usuario ORDER BY fecha_creacion DESC');
     return result.recordset.map(u => new Usuario(u));
   }
 
@@ -109,7 +107,6 @@ class Usuario {
     return await bcrypt.compare(password, this.contrasena);
   }
 
-  // Método para devolver datos públicos (sin contraseña)
   toPublicJSON() {
     return {
       id: this.id,
@@ -117,7 +114,6 @@ class Usuario {
       correo: this.correo,
       email: this.email,
       username: this.username,
-      estado: this.estado,
       fecha_creacion: this.fecha_creacion
     };
   }
