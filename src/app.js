@@ -1,4 +1,4 @@
-// src/app.js
+console.log('Cargando src/app.js...'); // Log de diagnóstico
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -33,7 +33,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Middleware para logging básico
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`Petición recibida en Express: ${req.method} ${req.path}`); // Log de diagnóstico
   next();
 });
 
@@ -63,7 +63,7 @@ app.use((req, res) => {
 
 // Middleware para manejo global de errores
 app.use((err, req, res, next) => {
-  console.error('Error no manejado:', err);
+  console.error('--- ERROR GLOBAL CAPTURADO ---', err); // Log de diagnóstico
   res.status(500).json({
     success: false,
     message: 'Error interno del servidor.',
