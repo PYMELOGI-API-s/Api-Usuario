@@ -1,8 +1,0 @@
-[build]
-  command = "echo 'Build exitoso'"
-  functions = "netlify/functions"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
