@@ -10,7 +10,7 @@ const app = express();
 // Middleware de seguridad
 app.use(helmet());
 
-// Rate limiting para /api/
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 100,
@@ -19,7 +19,7 @@ const limiter = rateLimit({
     message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.'
   }
 });
-app.use('/api/', limiter);
+app.use(limiter);
 
 // CORS
 app.use(cors({
@@ -37,27 +37,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rutas
+// Rutas (sin el prefijo /api, ya que lo maneja Netlify)
 const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 
-app.use('/api/auth', authRoutes);
-app.use('/api/usuarios', usuarioRoutes);
+app.use('/auth', authRoutes);
+app.use('/usuarios', usuarioRoutes);
 
 // Ruta raíz de la API
-app.get('/api', (req, res) => {
+app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'API de Usuarios funcionando',
+    message: 'API de Usuarios funcionando correctamente desde Netlify',
     version: process.env.API_VERSION || '1.0.0',
   });
 });
 
-// Middleware para rutas no encontradas
+// Middleware para rutas no encontradas dentro de la API
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Ruta no encontrada: ${req.method} ${req.originalUrl}`,
+    message: `Ruta no encontrada en la API: ${req.method} ${req.originalUrl}`,
   });
 });
 
