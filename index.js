@@ -1,21 +1,23 @@
+
+// index.js
 const express = require('express');
-const sql = require('mssql');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const dbConfig = require('./src/config/dbConfig');
+// Importar el pool de MySQL. Esto también inicia la conexión.
+require('./src/config/database');
+
 const authRoutes = require('./src/routes/authRoutes');
-const usuarioRoutes = require('./src/routes/usuarioRoutes');
+const usuarioRoutes = require('./src/routes/usuarioRoutes'); // Asumiendo que aún lo necesitas
 
 const app = express();
 const port = process.env.PORT || 8080;
 
-// Middleware de seguridad
+// --- Middlewares de Seguridad ---
 app.use(helmet());
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 100,
@@ -26,74 +28,48 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS
+// --- Middleware de CORS ---
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*', 
+  origin: process.env.CORS_ORIGIN || '*', // Ajusta esto para producción
   credentials: true
 }));
 
-// Middlewares para parsing
+// --- Middlewares para el Body Parsing ---
+// Esto reemplaza a bodyParser.json()
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ✅ Conexión global a la base de datos (reutilizable en Vercel)
-let poolPromise;
-async function getPool() {
-  if (!poolPromise) {
-    poolPromise = sql.connect(dbConfig)
-      .then(pool => {
-        console.log('✅ Conectado a SQL Server');
-        return pool;
-      })
-      .catch(err => {
-        console.error('❌ Error de conexión a la base de datos:', err);
-        poolPromise = null; // reset para reintento en la próxima request
-        throw err;
-      });
-  }
-  return poolPromise;
-}
-
-// Middleware para asignar pool
-app.use(async (req, res, next) => {
-  try {
-    req.pool = await getPool();
-    next();
-  } catch (err) {
-    res.status(500).send({ success: false, message: 'Error de conexión a la base de datos' });
-  }
-});
-
-// Middleware para logging básico
+// --- Middleware de Logging Básico ---
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Rutas
+// --- Rutas de la API ---
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 
-// Ruta raíz
+// --- Ruta Raíz ---
 app.get('/', (req, res) => {
   res.send('API de Usuarios funcionando 🚀');
 });
 
-// Middleware para rutas no encontradas
+// --- Middlewares de Manejo de Errores ---
+// Para rutas no encontradas (404)
 app.use((req, res) => {
   res.status(404).send({ success: false, message: 'Ruta no encontrada' });
 });
 
-// Middleware para manejo global de errores
+// Manejador global de errores
 app.use((err, req, res, next) => {
   console.error('Error no manejado:', err);
   res.status(500).send({ success: false, message: 'Error interno del servidor' });
 });
 
-// ✅ Exportar app para Vercel (serverless)
+// Exportar la app para Vercel (entorno serverless)
 module.exports = app;
 
-// ✅ Solo iniciar servidor en local
+// Iniciar el servidor solo si se ejecuta directamente (entorno local)
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`🚀 Servidor ejecutándose en http://localhost:${port}`);
