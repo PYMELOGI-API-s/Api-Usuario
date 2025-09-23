@@ -1,122 +1,54 @@
+
 // src/models/usuario.js
-const { poolPromise, sql } = require('../config/database');
+const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-class Usuario {
-  constructor(usuario) {
-    this.id = usuario.id;
-    this.contrasena = usuario.contrasena;
-    this.correo = usuario.correo;
-    this.nombre = usuario.nombre;
-    this.email = usuario.email || usuario.correo; // Compatibilidad
-    this.password = usuario.password || usuario.contrasena; // Compatibilidad
-    this.username = usuario.username;
-    this.fecha_creacion = usuario.fecha_creacion;
-  }
-
-  static async findById(id) {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT * FROM usuario WHERE id = @id');
-    return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
-  }
-
-  static async findByEmail(email) {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('email', sql.NVarChar, email)
-      .query('SELECT * FROM usuario WHERE (email = @email OR correo = @email)');
-    return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
-  }
-
-  static async findByUsername(username) {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('username', sql.NVarChar, username)
-      .query('SELECT * FROM usuario WHERE username = @username');
-    return result.recordset[0] ? new Usuario(result.recordset[0]) : null;
-  }
-
-  static async create(nuevoUsuario) {
-    const { nombre, correo, contrasena, username } = nuevoUsuario;
-    
+const Usuario = {
+  // Crear un nuevo usuario
+  create: async ({ nombre, correo, contrasena, username }) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(contrasena, salt);
+    
+    const sql = 'INSERT INTO Usuarios (nombre, correo, contrasena, username) VALUES (?, ?, ?, ?)';
+    
+    const [result] = await pool.execute(sql, [nombre, correo, hashedPassword, username]);
+    
+    // Devolvemos el usuario recién creado, excluyendo la contraseña
+    return { id: result.insertId, nombre, correo, username };
+  },
 
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('nombre', sql.NVarChar, nombre)
-      .input('correo', sql.NVarChar, correo)
-      .input('email', sql.NVarChar, correo)
-      .input('contrasena', sql.NVarChar, hashedPassword)
-      .input('password', sql.NVarChar, hashedPassword)
-      .input('username', sql.NVarChar, username)
-      .query(`
-        INSERT INTO usuario (nombre, correo, email, contrasena, password, username) 
-        OUTPUT INSERTED.* 
-        VALUES (@nombre, @correo, @email, @contrasena, @password, @username)
-      `);
-    return new Usuario(result.recordset[0]);
-  }
-
-  static async update(id, updates) {
-    const pool = await poolPromise;
-    const campos = [];
-    const request = pool.request().input('id', sql.Int, id);
-
-    if (updates.nombre) {
-      campos.push('nombre = @nombre');
-      request.input('nombre', sql.NVarChar, updates.nombre);
+  // Encontrar un usuario por su correo electrónico
+  findByEmail: async (correo) => {
+    const sql = 'SELECT * FROM Usuarios WHERE correo = ?';
+    const [rows] = await pool.execute(sql, [correo]);
+    if (rows.length === 0) {
+      return null;
     }
-    if (updates.correo) {
-      campos.push('correo = @correo, email = @correo');
-      request.input('correo', sql.NVarChar, updates.correo);
+    // Creamos una instancia que incluye el método para comparar contraseñas
+    return { ...rows[0], comparePassword: async function(candidatePassword) { return bcrypt.compare(candidatePassword, this.contrasena); } };
+  },
+
+  // Encontrar un usuario por su nombre de usuario
+  findByUsername: async (username) => {
+    const sql = 'SELECT * FROM Usuarios WHERE username = ?';
+    const [rows] = await pool.execute(sql, [username]);
+    if (rows.length === 0) {
+      return null;
     }
-    if (updates.username) {
-      campos.push('username = @username');
-      request.input('username', sql.NVarChar, updates.username);
+    return { ...rows[0], comparePassword: async function(candidatePassword) { return bcrypt.compare(candidatePassword, this.contrasena); } };
+  },
+
+  // Encontrar un usuario por su ID
+  findById: async (id) => {
+    const sql = 'SELECT * FROM Usuarios WHERE id = ?';
+    const [rows] = await pool.execute(sql, [id]);
+    if (rows.length === 0) {
+      return null;
     }
-    if (updates.contrasena) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(updates.contrasena, salt);
-      campos.push('contrasena = @contrasena, password = @contrasena');
-      request.input('contrasena', sql.NVarChar, hashedPassword);
-    }
-
-    if (campos.length > 0) {
-      await request.query(`UPDATE usuario SET ${campos.join(', ')} WHERE id = @id`);
-    }
+    // Devolvemos solo la información pública
+    const { contrasena, ...userPublic } = rows[0];
+    return userPublic;
   }
-
-  static async delete(id) {
-    const pool = await poolPromise;
-    await pool.request()
-      .input('id', sql.Int, id)
-      .query('DELETE FROM usuario WHERE id = @id');
-  }
-
-  static async getAll() {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .query('SELECT * FROM usuario ORDER BY fecha_creacion DESC');
-    return result.recordset.map(u => new Usuario(u));
-  }
-
-  async comparePassword(password) {
-    return await bcrypt.compare(password, this.contrasena);
-  }
-
-  toPublicJSON() {
-    return {
-      id: this.id,
-      nombre: this.nombre,
-      correo: this.correo,
-      email: this.email,
-      username: this.username,
-      fecha_creacion: this.fecha_creacion
-    };
-  }
-}
+};
 
 module.exports = Usuario;
