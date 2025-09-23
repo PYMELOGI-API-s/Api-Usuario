@@ -10,7 +10,6 @@ const authRoutes = require('./src/routes/authRoutes');
 const usuarioRoutes = require('./src/routes/usuarioRoutes');
 
 const app = express();
-
 const port = process.env.PORT || 8080;
 
 // Middleware de seguridad
