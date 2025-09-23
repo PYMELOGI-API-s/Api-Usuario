@@ -1,6 +1,6 @@
 // src/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const { poolPromise, sql } = require('../config/database');
+const pool = require('../config/database'); // ✅ Importar el pool de MySQL
 require('dotenv').config();
 
 // Middleware para verificar token JWT
@@ -19,12 +19,9 @@ const verificarToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('id', sql.Int, decoded.id)
-      .query('SELECT * FROM usuario WHERE id = @id');
-      
-    const usuario = result.recordset[0];
+    // ✅ Usar MySQL en lugar de SQL Server
+    const [rows] = await pool.execute('SELECT * FROM Usuarios WHERE id = ?', [decoded.id]);
+    const usuario = rows[0];
 
     if (!usuario) {
       return res.status(401).json({
@@ -37,7 +34,6 @@ const verificarToken = async (req, res, next) => {
       id: usuario.id,
       nombre: usuario.nombre,
       correo: usuario.correo,
-      email: usuario.email,
       username: usuario.username
     };
     
@@ -79,19 +75,15 @@ const verificarTokenOpcional = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('id', sql.Int, decoded.id)
-      .query('SELECT * FROM usuario WHERE id = @id');
-      
-    const usuario = result.recordset[0];
+    // ✅ Usar MySQL en lugar de SQL Server
+    const [rows] = await pool.execute('SELECT * FROM Usuarios WHERE id = ?', [decoded.id]);
+    const usuario = rows[0];
 
     if (usuario) {
       req.usuario = {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
-        email: usuario.email,
         username: usuario.username
       };
     }
