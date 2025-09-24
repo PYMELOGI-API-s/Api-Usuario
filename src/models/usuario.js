@@ -1,4 +1,3 @@
-
 // src/models/usuario.js
 const { pool, sql } = require('../config/database');
 const bcrypt = require('bcryptjs');
@@ -30,7 +29,7 @@ const Usuario = {
 
     const queryString = `
       INSERT INTO Usuarios (nombre, correo, contrasena, username)
-      OUTPUT inserted.id, inserted.nombre, inserted.correo, inserted.username
+      OUTPUT inserted.id, inserted.nombre, inserted.correo, inserted.username, inserted.fecha_creacion
       VALUES (@nombre, @correo, @hashedPassword, @username);
     `;
 
@@ -57,7 +56,7 @@ const Usuario = {
 
   // Encontrar un usuario por su nombre de usuario (devuelve el objeto completo)
   findByUsername: async (username) => {
-    const queryString = 'SELECT * FROM Usuarios WHERE username = @username';
+    const queryString = 'SELECT * FROM usuario WHERE username = @username';
     const request = pool.request();
     request.input('username', sql.NVarChar, username);
 
@@ -76,19 +75,20 @@ const Usuario = {
     return result.recordset.length > 0 ? result.recordset[0] : null;
   },
 
-  // Obtener todos los usuarios (solo datos públicos)
-  findAll: async () => {
+  // Obtener todos los usuarios (solo datos públicos) - ✅ Corregido el nombre del método
+  getAll: async () => {
     const queryString = 'SELECT id, nombre, correo, username, fecha_creacion FROM Usuarios';
     const result = await pool.request().query(queryString);
-    return result.recordset;
+    return result.recordset.map(user => enrichUserObject(user));
   },
 
   // Actualizar un usuario
-  update: async (id, { nombre, correo, username }) => {
+  update: async (id, updates) => {
+    const { nombre, correo, username } = updates;
+    
     const queryString = `
       UPDATE Usuarios
       SET nombre = @nombre, correo = @correo, username = @username
-      OUTPUT inserted.id, inserted.nombre, inserted.correo, inserted.username
       WHERE id = @id;
     `;
     const request = pool.request();
@@ -97,13 +97,15 @@ const Usuario = {
     request.input('correo', sql.NVarChar, correo);
     request.input('username', sql.NVarChar, username);
 
-    const result = await request.query(queryString);
-    return result.recordset.length > 0 ? result.recordset[0] : null;
+    await request.query(queryString);
+    
+    // Retornar el usuario actualizado
+    return await Usuario.findById(id);
   },
 
   // Eliminar un usuario
   delete: async (id) => {
-    const queryString = 'DELETE FROM Usuarios WHERE id = @id';
+    const queryString = 'DELETE FROM usuario WHERE id = @id';
     const request = pool.request();
     request.input('id', sql.Int, id);
     const result = await request.query(queryString);
