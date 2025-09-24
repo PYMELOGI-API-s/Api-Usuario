@@ -1,39 +1,41 @@
 
 // src/config/database.js
-const mysql = require('mysql2/promise');
+const sql = require('mssql');
 require('dotenv').config();
 
-// Configuración del pool de conexiones para MySQL
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
+const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
+  server: process.env.DB_SERVER,
   database: process.env.DB_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 10, 
-  queueLimit: 0,
-  // --- Agregado para compatibilidad con proveedores en la nube ---
-  ssl: { 
-    // No rechazar conexiones no autorizadas (necesario para muchos servicios en la nube)
-    rejectUnauthorized: false 
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true', // Use true for Azure SQL Database, adjust as needed
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' // Use true for local dev, not for production
   }
+};
+
+const pool = new sql.ConnectionPool(dbConfig);
+const poolConnect = pool.connect();
+
+pool.on('error', err => {
+  console.error('Error en el Pool de Conexiones de SQL Server:', err);
 });
 
-// Función para verificar la conexión
 async function checkConnection() {
   try {
-    const connection = await pool.getConnection();
-    console.log('🚀 Conectado a MySQL');
-    connection.release(); // Liberar la conexión inmediatamente después de verificar
+    await poolConnect;
+    console.log('🚀 Conectado a SQL Server');
   } catch (err) {
-    // Este error es el que probablemente verás en los logs de Vercel si algo falla
-    console.error('❌ Error de conexión a la base de datos: ', err);
-    // En un entorno serverless, es mejor lanzar el error para que falle rápido
-    throw err;
+    console.error('❌ Error de conexión a la base de datos SQL Server:', err);
+    // En un entorno de producción, podrías querer manejar esto de forma más robusta.
+    // Por ahora, simplemente terminaremos el proceso si no se puede conectar al inicio.
+    process.exit(1);
   }
 }
 
-// Verificar la conexión al iniciar la aplicación
 checkConnection();
 
-module.exports = pool;
+module.exports = {
+  pool,
+  sql
+};

@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-// Importar el pool de MySQL. Esto también inicia la conexión.
+
 require('./src/config/database');
 
 const authRoutes = require('./src/routes/authRoutes');
@@ -67,7 +67,7 @@ app.use((err, req, res, next) => {
 });
 
 // Exportar la app para Vercel (entorno serverless)
-module.exports = app;
+//module.exports = app;
 
 // Iniciar el servidor solo si se ejecuta directamente (entorno local)
 if (require.main === module) {
