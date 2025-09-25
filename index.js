@@ -14,6 +14,7 @@ const authRoutes = require('./src/routes/authRoutes');
 const usuarioRoutes = require('./src/routes/usuarioRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 const port = process.env.PORT || 8080;
 
 // --- Middlewares de Seguridad ---
